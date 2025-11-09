@@ -1,12 +1,25 @@
+/*
+    * loader.c
+    *
+    *  Created on: Nov 9, 2025
+    *  
+    *  Functions to load the MNIST dataset from binary files into memory.
+    *  The dataset consists of training and testing images and their corresponding labels.
+    *  Images are normalized to the range [0,1] and labels are one-hot encoded.
+    *
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include "config.h"
 #include "loader.h"
+#include "nnp.h"
 
-// Global arrays
+/* Global arrays to store training dataset */
 float train_data[NUM_TRAIN][SIZE];
 float train_label[NUM_TRAIN][CLASSES];   // one-hot
+
+/* Global arrays to store test dataset */
 float test_data[NUM_TEST][SIZE];
 float test_label[NUM_TEST][CLASSES];     // one-hot
 
@@ -17,6 +30,12 @@ int read_int(FILE *f) {
     return (b[0]<<24)|(b[1]<<16)|(b[2]<<8)|b[3];
 }
 
+/* load_data: load image data from binary file
+ * Arguments:
+ *   filename: path to the binary data file
+ *   data: 2D array to store loaded image data
+ *   num: number of images to load
+ */
 void load_data(const char *filename, float data[][SIZE], int num) {
     FILE *f=fopen(filename,"rb");
     if(!f){ perror("open data file"); exit(1); }
@@ -35,6 +54,12 @@ void load_data(const char *filename, float data[][SIZE], int num) {
     fclose(f);
 }
 
+/* load_labels: load label data from binary file
+ * Arguments:
+ *   filename: path to the binary label file
+ *   labels: 2D array to store loaded one-hot encoded labels
+ *   num: number of labels to load
+ */
 void load_labels(const char *filename, float labels[][CLASSES], int num) {
     FILE *f=fopen(filename,"rb");
     if(!f){ perror("open label file"); exit(1); }
@@ -51,6 +76,10 @@ void load_labels(const char *filename, float labels[][CLASSES], int num) {
     fclose(f);
 }
 
+/* load_dataset: load the entire MNIST dataset into memory
+ * Arguments:
+ *   None
+ */
 void load_dataset() {
     load_data(TRAIN_DATA, train_data, NUM_TRAIN);
     load_labels(TRAIN_LABELS, train_label, NUM_TRAIN);
