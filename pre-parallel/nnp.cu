@@ -65,7 +65,7 @@ void init_weights(float *w, int size) {
         w[i] = ((float)rand()/RAND_MAX - 0.5f) * 0.1f;
 }
 
-/* CUDA error checking helper */
+// quick cuda check helper
 #define CHECK_CUDA(call)                                                                  \
     do {                                                                                  \
         cudaError_t err__ = (call);                                                       \
@@ -101,62 +101,62 @@ void train_model(MODEL* model){
     CHECK_CUDA(cudaMemcpy(d_b3, model->b3, sizeof(float) * CLASSES, cudaMemcpyHostToDevice));
 
     // Allocate and copy training data to device memory
-    float *d_train_data = NULL;
-    float *d_train_label = NULL;
-    CHECK_CUDA(cudaMalloc(&d_train_data, sizeof(float) * NUM_TRAIN * SIZE));
-    CHECK_CUDA(cudaMalloc(&d_train_label, sizeof(float) * NUM_TRAIN * CLASSES));
-    CHECK_CUDA(cudaMemcpy(d_train_data, train_data, sizeof(float) * NUM_TRAIN * SIZE,
+    float *d_train_x = NULL;
+    float *d_train_y = NULL;
+    CHECK_CUDA(cudaMalloc(&d_train_x, sizeof(float) * NUM_TRAIN * SIZE));
+    CHECK_CUDA(cudaMalloc(&d_train_y, sizeof(float) * NUM_TRAIN * CLASSES));
+    CHECK_CUDA(cudaMemcpy(d_train_x, train_data, sizeof(float) * NUM_TRAIN * SIZE,
                           cudaMemcpyHostToDevice));
-    CHECK_CUDA(cudaMemcpy(d_train_label, train_label, sizeof(float) * NUM_TRAIN * CLASSES,
+    CHECK_CUDA(cudaMemcpy(d_train_y, train_label, sizeof(float) * NUM_TRAIN * CLASSES,
                           cudaMemcpyHostToDevice));
 
     // Allocate workspace on the device
-    float *d_h1a = NULL;
-    float *d_h2a = NULL;
-    float *d_out = NULL, *d_outa = NULL;
-    float *d_delta1 = NULL, *d_delta2 = NULL, *d_delta3 = NULL;
+    float *d_h1 = NULL;
+    float *d_h2 = NULL;
+    float *d_out = NULL, *d_prob = NULL;
+    float *d_err1 = NULL, *d_err2 = NULL, *d_err3 = NULL;
 
-    CHECK_CUDA(cudaMalloc(&d_h1a, sizeof(float) * H1));
-    CHECK_CUDA(cudaMalloc(&d_h2a, sizeof(float) * H2));
+    CHECK_CUDA(cudaMalloc(&d_h1, sizeof(float) * H1));
+    CHECK_CUDA(cudaMalloc(&d_h2, sizeof(float) * H2));
     CHECK_CUDA(cudaMalloc(&d_out, sizeof(float) * CLASSES));
-    CHECK_CUDA(cudaMalloc(&d_outa, sizeof(float) * CLASSES));
-    CHECK_CUDA(cudaMalloc(&d_delta1, sizeof(float) * H1));
-    CHECK_CUDA(cudaMalloc(&d_delta2, sizeof(float) * H2));
-    CHECK_CUDA(cudaMalloc(&d_delta3, sizeof(float) * CLASSES));
+    CHECK_CUDA(cudaMalloc(&d_prob, sizeof(float) * CLASSES));
+    CHECK_CUDA(cudaMalloc(&d_err1, sizeof(float) * H1));
+    CHECK_CUDA(cudaMalloc(&d_err2, sizeof(float) * H2));
+    CHECK_CUDA(cudaMalloc(&d_err3, sizeof(float) * CLASSES));
 
-    float host_outa[CLASSES];
+    float prob_host[CLASSES];
 
     for (int epoch = 0; epoch < EPOCHS; epoch++) {
         double loss = 0.0;
 
         for (int n = 0; n < NUM_TRAIN; n++) {
-            const float *d_x = d_train_data + (size_t)n * SIZE;
-            const float *d_y = d_train_label + (size_t)n * CLASSES;
+            const float *d_x = d_train_x + (size_t)n * SIZE;
+            const float *d_y = d_train_y + (size_t)n * CLASSES;
 
-            CHECK_CUDA(launch_forward_layer_relu(d_W1, d_b1, d_x, NULL, d_h1a, SIZE, H1));
-            CHECK_CUDA(launch_forward_layer_relu(d_W2, d_b2, d_h1a, NULL, d_h2a, H1, H2));
-            CHECK_CUDA(launch_forward_layer_linear(d_W3, d_b3, d_h2a, d_out, H2, CLASSES));
-            CHECK_CUDA(launch_softmax(d_out, d_outa, CLASSES));
+            CHECK_CUDA(run_relu_layer(d_W1, d_b1, d_x, NULL, d_h1, SIZE, H1));
+            CHECK_CUDA(run_relu_layer(d_W2, d_b2, d_h1, NULL, d_h2, H1, H2));
+            CHECK_CUDA(run_linear_layer(d_W3, d_b3, d_h2, d_out, H2, CLASSES));
+            CHECK_CUDA(run_softmax(d_out, d_prob, CLASSES));
 
-            CHECK_CUDA(cudaMemcpy(host_outa, d_outa, sizeof(float) * CLASSES,
+            CHECK_CUDA(cudaMemcpy(prob_host, d_prob, sizeof(float) * CLASSES,
                                   cudaMemcpyDeviceToHost));
             for (int k = 0; k < CLASSES; ++k) {
                 float target = train_label[n][k];
-                loss -= target * logf(host_outa[k] + 1e-8f);
+                loss -= target * logf(prob_host[k] + 1e-8f);
             }
 
-            CHECK_CUDA(launch_delta_output(d_y, d_outa, d_delta3, CLASSES));
-            CHECK_CUDA(launch_backprop_hidden(d_W3, d_delta3, d_h2a, d_delta2, H2, CLASSES));
-            CHECK_CUDA(launch_backprop_hidden(d_W2, d_delta2, d_h1a, d_delta1, H1, H2));
+            CHECK_CUDA(run_output_delta(d_y, d_prob, d_err3, CLASSES));
+            CHECK_CUDA(run_hidden_delta(d_W3, d_err3, d_h2, d_err2, H2, CLASSES));
+            CHECK_CUDA(run_hidden_delta(d_W2, d_err2, d_h1, d_err1, H1, H2));
 
-            CHECK_CUDA(launch_update_weights(d_h2a, d_delta3, d_W3, H2, CLASSES, LR));
-            CHECK_CUDA(launch_update_bias(d_b3, d_delta3, CLASSES, LR));
+            CHECK_CUDA(run_weight_step(d_h2, d_err3, d_W3, H2, CLASSES, LR));
+            CHECK_CUDA(run_bias_step(d_b3, d_err3, CLASSES, LR));
 
-            CHECK_CUDA(launch_update_weights(d_h1a, d_delta2, d_W2, H1, H2, LR));
-            CHECK_CUDA(launch_update_bias(d_b2, d_delta2, H2, LR));
+            CHECK_CUDA(run_weight_step(d_h1, d_err2, d_W2, H1, H2, LR));
+            CHECK_CUDA(run_bias_step(d_b2, d_err2, H2, LR));
 
-            CHECK_CUDA(launch_update_weights(d_x, d_delta1, d_W1, SIZE, H1, LR));
-            CHECK_CUDA(launch_update_bias(d_b1, d_delta1, H1, LR));
+            CHECK_CUDA(run_weight_step(d_x, d_err1, d_W1, SIZE, H1, LR));
+            CHECK_CUDA(run_bias_step(d_b1, d_err1, H1, LR));
         }
 
         printf("Epoch %d, Loss=%.4f\n", epoch, loss / (double)NUM_TRAIN);
@@ -171,15 +171,15 @@ void train_model(MODEL* model){
     CHECK_CUDA(cudaMemcpy(model->W3, d_W3, sizeof(float) * H2 * CLASSES, cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(model->b3, d_b3, sizeof(float) * CLASSES, cudaMemcpyDeviceToHost));
 
-    CHECK_CUDA(cudaFree(d_delta3));
-    CHECK_CUDA(cudaFree(d_delta2));
-    CHECK_CUDA(cudaFree(d_delta1));
-    CHECK_CUDA(cudaFree(d_outa));
+    CHECK_CUDA(cudaFree(d_err3));
+    CHECK_CUDA(cudaFree(d_err2));
+    CHECK_CUDA(cudaFree(d_err1));
+    CHECK_CUDA(cudaFree(d_prob));
     CHECK_CUDA(cudaFree(d_out));
-    CHECK_CUDA(cudaFree(d_h2a));
-    CHECK_CUDA(cudaFree(d_h1a));
-    CHECK_CUDA(cudaFree(d_train_label));
-    CHECK_CUDA(cudaFree(d_train_data));
+    CHECK_CUDA(cudaFree(d_h2));
+    CHECK_CUDA(cudaFree(d_h1));
+    CHECK_CUDA(cudaFree(d_train_y));
+    CHECK_CUDA(cudaFree(d_train_x));
     CHECK_CUDA(cudaFree(d_b3));
     CHECK_CUDA(cudaFree(d_W3));
     CHECK_CUDA(cudaFree(d_b2));

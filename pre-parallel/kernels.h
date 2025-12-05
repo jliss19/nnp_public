@@ -11,47 +11,47 @@
 
 #include <cuda_runtime.h>
 
-cudaError_t launch_forward_layer_relu(const float *weights,
-									  const float *bias,
-									  const float *input,
-									  float *pre_activation,
-									  float *activation,
-									  int in_dim,
-									  int out_dim);
+cudaError_t run_relu_layer(const float *w,
+                           const float *b,
+                           const float *x,
+                           float *pre,
+                           float *out,
+                           int in_size,
+                           int out_size);
 
-cudaError_t launch_forward_layer_linear(const float *weights,
-										const float *bias,
-										const float *input,
-										float *output,
-										int in_dim,
-										int out_dim);
+cudaError_t run_linear_layer(const float *w,
+                             const float *b,
+                             const float *x,
+                             float *out,
+                             int in_size,
+                             int out_size);
 
-cudaError_t launch_softmax(const float *input,
-						   float *output,
-						   int len);
+cudaError_t run_softmax(const float *in,
+                        float *out,
+                        int len);
 
-cudaError_t launch_delta_output(const float *labels,
-								const float *predictions,
-								float *delta,
-								int len);
+cudaError_t run_output_delta(const float *label,
+                             const float *pred,
+                             float *delta,
+                             int len);
 
-cudaError_t launch_backprop_hidden(const float *weights_next,
-								   const float *delta_next,
-								   const float *activation,
-								   float *delta_current,
-								   int current_size,
-								   int next_size);
+cudaError_t run_hidden_delta(const float *next_w,
+                             const float *next_delta,
+                             const float *act,
+                             float *cur_delta,
+                             int cur_size,
+                             int next_size);
 
-cudaError_t launch_update_weights(const float *activation,
-								  const float *delta,
-								  float *weights,
-								  int in_dim,
-								  int out_dim,
-								  float lr);
+cudaError_t run_weight_step(const float *act,
+                            const float *delta,
+                            float *w,
+                            int in_size,
+                            int out_size,
+                            float lr);
 
-cudaError_t launch_update_bias(float *bias,
-							   const float *delta,
-							   int size,
-							   float lr);
+cudaError_t run_bias_step(float *b,
+                          const float *delta,
+                          int size,
+                          float lr);
 
 #endif
